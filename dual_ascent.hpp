@@ -1,189 +1,201 @@
-#include<vector> 
+#include <vector>
 #include <iostream>
 #include <string>
 #include <fstream>
 #include <cstdlib>
-#include <math.h>  
+#include <cmath>
 #include <algorithm>
+#include "Dictionnary.hpp"
+using namespace std;
 
-   class dual_ascent{
-
-
-
-    float * x;
-    float * b;
-    float **A;
-    float *Z;
-    float zobj; 
-    int number_objectives; 
-    int number_constraints;
-    int number_variables;
-    
+class Dual_ascent
+{
 
 
+    std::string name;
+    Dictionnary<std::string, float> *dict;
+    float x_opt;
+    float lambda_opt;
+    bool test_quadratic_program = true;
+    bool test_linear_program = true;
 
-   
-    public: 
+    public:
 
+    Dual_ascent(std::string name, int dictSize)
+    {
+        name = name;
+        dict = new Dictionnary<std::string, float>(dictSize);
+        x_opt = 0;
+        lambda_opt = 0;
+    }
 
-      Simplexe(std::string name) 
-      {
+    void readData(std::string namefile)
+    {
+        string a, b;
+        float value;
+        // function for parsing the file and filling dictionnary
 
-   
-            std::ifstream fichier(name);
-                if(fichier){
-                    
-                    fichier >> number_objectives; 
-                    std::cout << number_objectives << std::endl; 
-                    fichier >> number_variables;
-                    std::cout << number_variables << std::endl; 
-
-                    fichier >> number_constraints;
-                    dict_form = new Dictionnary(number_variables,number_constraints);
-                     zobj = 0;
-                     x = new float[number_variables];
-                     b = new float[number_constraints]; 
-                     Z  = new float[number_variables];
-                    A = new float*[number_constraints];
-                    for(int i = 0; i < number_constraints; i++){
-                        A[i] = new float[number_variables + 1]; 
-                    }
-                    for(int i = 0; i < number_variables; i++){
-                     fichier >> Z[i];
-                    }
-
-                    for(int i = 0; i < number_constraints; i++){
-                        for(int j = 0; j < number_variables; j++){
-                            fichier >> A[i][j];
-
-                        }
-                    }
-                    
-                    
-                    for(int i = 0; i < number_constraints; i++){
-                        fichier >> b[i];
-                    }
-                }
-
-
-                
-
-
-
-            }
-
-        void display_simplex(){
-            std::cout << "Number of constraints: " << number_constraints << std::endl; 
-            std::cout << "Number of Variables: " << number_variables << std::endl;
-
-            std::cout << "Objective function: ";
-            for(int i = 0; i < number_variables; i++){
-                std::cout << Z[i] << " ";
-            }
-            std::cout << std::endl; 
-            std::cout << "Constraint bounds: ";
-
-            for (int i = 0 ; i < number_constraints; i++){
-                std::cout << b[i] << " ";
-            }
-            std::cout << std::endl;
-            std::cout << "Matrix constraints: ";
-
-               for(int i = 0; i < number_constraints; i++){
-                        for(int j = 0; j < number_variables; j++){
-                              std::cout << A[i][j] << " ";
-
-                        }
-                         std::cout << std::endl; 
-                    }
-
+        std::ifstream file(namefile);
+        if (!file)
+        {
+            std::cerr << "Error opening file: " << name << std::endl;
+            return;
         }
 
+        while (file >> a >> b >> value)
+        {
+            dict->insert(a, value);
+        }
+        file.close();
+    }
 
-        void fill_dictionnary(){
-                 for(int i = 0; i < number_constraints; i++){
-                    for(int j = 0; j < number_variables; j++){
-                            dict_form->constraint_matrix[i][j] =  A[i][j];
+    void test_if_quadratic_program()
+    {
+        float a1 = dict->return_value("a1x2");
+        float a2 = dict->return_value("a2x2");
+        // One of the quadratic coefficients must be difference of zero
+        if (a1 != 0 || a2 != 0)
+        {
+            test_quadratic_program = true;
+        }
+        else
+        {
+            test_quadratic_program = false;
+        }
+    }
 
-                        }
+    void test_if_linear_program()
+    {
+        float b2 = dict->return_value("b2x");
+        if (b2 != 0)
+        {
+            test_linear_program = true;
+        }
+        else
+        {
+            test_linear_program = false;
+        }
+    }
 
-                    }
-                    for(int i = 0; i < number_constraints; i++){
-                        for (int j = number_variables; j < number_variables + number_constraints; j++){
-                            dict_form->constraint_matrix[i][j] =  0;
+    float calulate_solution_linear_programming()
+    {
+        float c2 = dict->return_value("c2");
+        float b2 = dict->return_value("b2");
+        float x = c2 / b2;
+        return x;
+    }
 
-                        }
+    float Min_Lagrangien_function(float lambda)
+    {
+        // L(x,lambda) = a1*x^2 + b1*x + c1 + lambda*(c2 - a2x^2 - b2x)
+        // Derivative: L'(x,lambda) = 2*a1*x + b1 - 2*a2*lambda*x - b2*lambda
+        // Solving for x: x = -(b1 - b2*lambda) / (2*(a1 - a2*lambda))
+        float x = 0;
+        float a1 = dict->return_value("a1x2");
+        float b1 = dict->return_value("b1x");
+        float a2 = dict->return_value("a2x2");
+        float b2 = dict->return_value("b2x");
 
-                        dict_form->constraint_matrix[i][number_variables + i] = 1; 
-
-                    }
-                    for(int i = 0; i < number_variables; i++){
-                        dict_form->Cj_Zj[i] = Z[i];
-                    }
-                    for(int i = 0; i < number_constraints; i++){
-                        dict_form->Cj_Zj[number_variables + i] = 0 ; 
-                        dict_form->constraint_matrix[i][number_constraints + number_variables] = b[i];
-
-                    }
-                    dict_form->Cj_Zj[number_variables + number_constraints] = 0; 
-
-
-            
+        float numerator = b2 * lambda - b1;
+        ;
+        float denominator = 2 * (a1 - lambda * a2);
+        if (denominator != 0)
+        {
+            x = numerator / denominator;
+        }
+        else
+        {
+            std::cout << "Denominator is Null, we have a linear program with one constraint." << std::endl;
+            x = 0; // or some default value or error handling
         }
 
+        return x;
+    }
 
-        
-        void display_dictionnary(){
-            std::cout << "Number of constraints: " << number_constraints << std::endl; 
-            std::cout << "Number of Variables: " << number_variables << std::endl;
-            std::cout << "Cj_Zj: ";
-            for(int i = 0; i < number_variables + number_constraints + 1; i++){
-                std::cout << dict_form->Cj_Zj[i] << " ";
+    float update_lambda(float x, float lambda)
+    {
+        float c2 = dict->return_value("c2");
+        float a2 = dict->return_value("a2x2");
+        float b2 = dict->return_value("b2x");
+        float constraint_value = c2 - a2 * x * x - b2 * x;
+        float lambda_new = std::max(0.0f, lambda + 0.1f * constraint_value); // 0.1 is the step size
+        return lambda_new;
+    }
+
+    void display_equations()
+    {
+        // display dictionnary content
+        std::cout << "equations content:" << std::endl;
+        dict->dictionnary_diplay_key_value();
+    }
+
+    void display_the_program()
+    {
+        std::cout << "Program for " + name + ":" << std::endl;
+        std::cout << "Objective function: " << std::endl;
+        std::cout << "Minimize P = ";
+        std::cout << dict->return_value("a1x2") << "x^2 + ";
+        std::cout << dict->return_value("b1x") << "x + ";
+        std::cout << dict->return_value("c1");
+        std::cout << std::endl;
+        std::cout << "Subject to: " << std::endl;
+        std::cout << dict->return_value("a2x2") << "x^2 + ";
+        std::cout << dict->return_value("b2x") << "x >= ";
+        std::cout << dict->return_value("c2");
+        std::cout << std::endl;
+    }
+
+    void solve_dual_ascent()
+    {
+        float epsilon = 0.0000000001f;
+        float previous_lambda = 0;
+        int max_iterations = 1000000;
+        int iteration = 0;
+        float x_t = 0;
+        float lambda_t = 0;
+        test_if_quadratic_program();
+        test_if_linear_program();
+        if (!test_quadratic_program)
+        {
+            if (!test_linear_program)
+            {
+                std::cout << "This is not a quadratic program nor a linear program." << std::endl;
+                return;
             }
-            std::cout << std::endl; 
-            std::cout << "Matrix constraints dictionnary: ";
-            for(int i = 0; i < number_constraints; i++){
-                for(int j = 0; j < number_variables + number_constraints + 1; j++){
-                    std::cout << dict_form->constraint_matrix[i][j] << " ";
-                }
-                std::cout << std::endl;
+            else
+            {
+                std::cout << "This is a linear program with one constraint." << std::endl;
+                float x_opt = calulate_solution_linear_programming();
+                std::cout << "Optimal solution x*: " << x_opt << std::endl;
+                return;
             }
         }
+        while (iteration < max_iterations)
+        {
+            // Step 1: Minimize L(x, lambda) with respect to x
+            x_t = Min_Lagrangien_function(previous_lambda);
 
+            // Step 2: Update lambda
+            lambda_t = update_lambda(x_t, previous_lambda);
+            std::cout << "Iteration " << iteration << ": x = " << x_t << ", lambda = " << lambda_t << std::endl;
 
-        void resolve_simplexe(){
-            fill_dictionnary();
-            int iteration_number = 0;
-            bool stop = false; 
-            std::cout << "nbvar: " << number_variables << std::endl;  
-            while (stop == false){
-                std::cout << "iteration number is: " << iteration_number << std::endl; 
-                for(int i = 0; i < number_variables; i ++){
-                    std::cout << "Ciji: " << dict_form->Cj_Zj[i] << std::endl;
-                    if(dict_form->Cj_Zj[i] > 0){
-                        iteration_number += 1;
-                        std::cout << "iteration number is: " << iteration_number << std::endl; 
-                        dict_form->choose_input_index();
-                        dict_form->choose_pivot_line();
-                        dict_form->pivot_dictionnary(); 
-                        display_dictionnary();
-
-                        if(iteration_number >= number_variables){
-                        stop = true;
-                        std::cout << "Stop condition reached, exiting loop." << std::endl;
-                        break;
-                    }
-
-
-                    }
-            
-
-                }
-                
-
-
+            // Check for convergence
+            if (std::abs(lambda_t - previous_lambda) < epsilon)
+            {
+                break;
             }
-
+            previous_lambda = lambda_t;
+            iteration++;
         }
 
+        x_opt = x_t;
+        lambda_opt = lambda_t;
+    }
+
+    void display_solution()
+    {
+        std::cout << "Dual Ascent Solution for " << name << ":" << std::endl;
+        std::cout << "Optimal solution x*: " << x_opt << std::endl;
+        std::cout << "Optimal Lagrange multiplier lambda*: " << lambda_opt << std::endl;
+    }
 };

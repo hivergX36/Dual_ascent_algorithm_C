@@ -6,16 +6,16 @@
 #include <math.h>
 #include <algorithm>
 
+
+
 template <typename Key, typename Value>
-class HashMap
+class Dictionnary
 {
 
     private: 
 
     // Size in fonction of the degree of the polynomial
-    static const int table_size = 5;
 
-    std::vector<std::pair<Key, Value>> dictionnary[table_size];
 
     int hashFunction(const Key &key)
     {
@@ -28,6 +28,15 @@ class HashMap
     }
 
     public:
+
+    int table_size;
+    std::vector<std::pair<Key, Value>> *dictionnary;
+
+    Dictionnary(int size)
+    {
+        table_size = size;
+        dictionnary = new std::vector<std::pair<Key, Value>>[table_size];
+    }
 
     void insert(const Key &key, const Value &value)
     {
